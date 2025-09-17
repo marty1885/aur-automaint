@@ -1,0 +1,136 @@
+#!/bin/bash
+# Copyright 2025 Martin Chang
+# SPDX-License-Identifier: BSD-2-Clause
+set -o errexit
+
+help() {
+    echo "${1} - automatically maintain a versioned AUR package repository"
+    echo "Usage ${1} /path/to/local/repo"
+    echo "Arguments:"
+    echo "  -h, --help      Display this help message"
+    echo "  -p, --push      Push changes to remote repository"
+}
+
+OPTIONS="h:p"
+LONGOPTIONS="help:,push"
+
+PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@")
+if [ $? -ne 0 ]; then
+    help
+    exit 1
+fi
+eval set -- "$PARSED"
+
+repo_path=""
+push_to_remote=0
+while true; do
+    echo "Arg ${1}"
+    case "${1}" in
+    -h|--help)
+        help "${0}"
+        exit 0
+        ;;
+    -p|--push)
+        push_to_remote=1
+        shift
+        ;;
+    --)
+        shift
+    ;;
+    *)
+        if [[ "$repo_path" != "" ]]; then
+            echo "Repository path already specified"
+            exit 1
+        fi
+        repo_path="${1}"
+        shift
+        break
+    ;;
+    esac
+done
+
+if [[ "${repo_path}" == "" ]]; then
+    echo "Missing repository path" >&2
+    echo >&2
+    help "${0}"
+    exit 1
+fi
+
+if [ ! -d "${repo_path}" ]; then
+    echo "cannot access path '${repo_path}' as a directory"
+    exit 1
+fi
+
+pkgbuild_path="${repo_path}/PKGBUILD"
+if [ ! -f "${pkgbuild_path}" ]; then
+    echo "cannot access '${repo_path}' as a file"
+    exit 1
+fi
+
+source "${pkgbuild_path}"
+
+if [[ ! -v url ]]; then
+    echo "PKGBUILD does not contain repository URL"
+    exit 1
+fi
+
+if [[ ! -v pkgver ]]; then
+    echo "PKGBUILD does not contain pkgver"
+    exit 1
+fi
+
+gh_api_url="${url/github.com/api.github.com\/repos}/releases/latest"
+repo_version_string="$(curl -s "$gh_api_url" | jq -r '.name' | sed 's/v//')"
+
+if [[ "${repo_version_string}" == "${pkgver}" ]]; then
+    echo "AUR package version is in sync with repo release. Nothing to do"
+    exit 0
+fi
+
+echo "Current package version is ${pkgver}. Repo has version ${repo_version_string}. Updating"
+
+tmp_file="/tmp/$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 10)"
+
+# edit the PKGBUILD
+# 1. Update pkgver
+# 2. Set pkgrel to 1 (new version)
+echo "Updating existing PKGBUILD.."
+gawk -v newver="${repo_version_string}" '
+    {
+        if($0 ~ /pkgver=/) {
+            if(edited) {
+                print
+                next
+            }
+            edited=1
+            print "pkgver=" newver
+            next
+        }
+        else if($0 ~ /pkgrel=/) {
+            print "pkgrel=1"
+        }
+        else {
+            print $0
+        }
+    }
+    END{
+        if(edited==0) {
+            print "ERROR: No replacment happened" > /dev/stderr
+            exit 1
+        }
+    }
+' "${pkgbuild_path}" > "${tmp_file}"
+mv "${tmp_file}" "${pkgbuild_path}"
+
+(
+    cd "${repo_path}"
+    echo "Generating .SRCINFO"
+    makepkg --printsrcinfo > .SRCINFO
+    git add -A
+    echo "Committing changes"
+    git commit -m "Update PKGBUILD to version ${repo_version_string}"
+    if [[ "${push_to_remote}" -ne 0 ]]; then
+        echo "Pushing changes"
+        # git push origin master
+    fi
+)
