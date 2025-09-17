@@ -14,8 +14,8 @@ help() {
     echo "  -s, --skip      Skip test building locally"
 }
 
-OPTIONS="h:p"
-LONGOPTIONS="help:,push"
+OPTIONS="h:p:s"
+LONGOPTIONS="help:,push:,skip"
 
 PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@")
 if [ $? -ne 0 ]; then
@@ -87,7 +87,7 @@ if [[ ! -v pkgver ]]; then
 fi
 
 gh_api_url="${url/github.com/api.github.com\/repos}/releases/latest"
-repo_version_string="$(curl -s "$gh_api_url" | jq -r '.name' | sed 's/v//')"
+repo_version_string="$(curl -s "$gh_api_url" | jq -r '.name' | sed 's/^v//')"
 
 if [[ "${repo_version_string}" == "${pkgver}" ]]; then
     echo "AUR package version is in sync with repo release. Nothing to do"
@@ -104,7 +104,7 @@ tmp_file="/tmp/$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 10)"
 printf "${GREEN_ARROW} Updating existing PKGBUILD..\n"
 gawk -v newver="${repo_version_string}" '
     {
-        if($0 ~ /pkgver=/) {
+        if($0 ~ /^pkgver=/) {
             if(edited) {
                 print
                 next
@@ -113,7 +113,7 @@ gawk -v newver="${repo_version_string}" '
             print "pkgver=" newver
             next
         }
-        else if($0 ~ /pkgrel=/) {
+        else if($0 ~ /^pkgrel=/) {
             print "pkgrel=1"
         }
         else {
@@ -134,7 +134,7 @@ mv "${tmp_file}" "${pkgbuild_path}"
         cd "${repo_path}"
         rm -r src pkg 2> /dev/null || true
         if ! makepkg -fs --clean; then
-            echo "!!!!!!!!!!!!!! FAILED TO BUILD UPDATED PACKAGE LOCALLY!!!!!!!!!!!!!!" 2>&1
+            echo "!!!!!!!!!!!!!! FAILED TO BUILD UPDATED PACKAGE LOCALLY !!!!!!!!!!!!!!" 2>&1
             echo "Manual intervention needed" 2>&1
             exit 1
         fi
