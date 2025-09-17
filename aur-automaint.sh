@@ -9,13 +9,14 @@ help() {
     echo "${1} - automatically maintain a versioned AUR package repository"
     echo "Usage ${1} /path/to/local/repo"
     echo "Arguments:"
-    echo "  -h, --help      Display this help message"
-    echo "  -p, --push      Push changes to remote repository"
-    echo "  -s, --skip      Skip test building locally"
+    echo "  -h, --help         Display this help message"
+    echo "  -p, --push         Push changes to remote repository"
+    echo "  -s, --skip         Skip test building locally"
+    echo "  -u, --update-only  Update PKGBUILD only. Do not commit"
 }
 
-OPTIONS="h:p:s"
-LONGOPTIONS="help:,push:,skip"
+OPTIONS="h:p:s:u"
+LONGOPTIONS="help:,push:,skip,update-only"
 
 PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@")
 if [ $? -ne 0 ]; then
@@ -27,6 +28,7 @@ eval set -- "$PARSED"
 repo_path=""
 push_to_remote=0
 skip_build=0
+update_only=0
 while true; do
     case "${1}" in
     -h|--help)
@@ -39,6 +41,10 @@ while true; do
         ;;
     -s|--skip)
         skip_build=1
+        shift
+        ;;
+    -u|--update-only)
+        update_only=1
         shift
         ;;
     --)
@@ -70,7 +76,7 @@ fi
 
 pkgbuild_path="${repo_path}/PKGBUILD"
 if [ ! -f "${pkgbuild_path}" ]; then
-    echo "cannot access '${repo_path}' as a file"
+    echo "cannot access '${pkgbuild_path}' as a file"
     exit 1
 fi
 
@@ -87,7 +93,7 @@ if [[ ! -v pkgver ]]; then
 fi
 
 gh_api_url="${url/github.com/api.github.com\/repos}/releases/latest"
-repo_version_string="$(curl -s "$gh_api_url" | jq -r '.name' | sed 's/^v//')"
+repo_version_string="$(curl -s "$gh_api_url" | jq -r '.name' | sed 's/^v//' | sed 's/^r//')"
 
 if [[ "${repo_version_string}" == "${pkgver}" ]]; then
     echo "AUR package version is in sync with repo release. Nothing to do"
@@ -141,6 +147,11 @@ mv "${tmp_file}" "${pkgbuild_path}"
         printf "$GREEN_ARROW Packaging locally successfull!\n"
     fi
 )
+
+if [[ "${update_only}" -ne 0 ]]; then
+    exit 0
+fi
+
 (
     cd "${repo_path}"
     printf "$GREEN_ARROW Generating .SRCINFO\n"
