@@ -3,12 +3,15 @@
 # SPDX-License-Identifier: BSD-2-Clause
 set -o errexit
 
+GREEN_ARROW="\033[0;92m=>\033[0m"
+
 help() {
     echo "${1} - automatically maintain a versioned AUR package repository"
     echo "Usage ${1} /path/to/local/repo"
     echo "Arguments:"
     echo "  -h, --help      Display this help message"
     echo "  -p, --push      Push changes to remote repository"
+    echo "  -s, --skip      Skip test building locally"
 }
 
 OPTIONS="h:p"
@@ -23,8 +26,8 @@ eval set -- "$PARSED"
 
 repo_path=""
 push_to_remote=0
+skip_build=0
 while true; do
-    echo "Arg ${1}"
     case "${1}" in
     -h|--help)
         help "${0}"
@@ -32,6 +35,10 @@ while true; do
         ;;
     -p|--push)
         push_to_remote=1
+        shift
+        ;;
+    -s|--skip)
+        skip_build=1
         shift
         ;;
     --)
@@ -87,14 +94,14 @@ if [[ "${repo_version_string}" == "${pkgver}" ]]; then
     exit 0
 fi
 
-echo "Current package version is ${pkgver}. Repo has version ${repo_version_string}. Updating"
+printf "$GREEN_ARROW Current package version is ${pkgver}. Repo has version ${repo_version_string}. Updating\n"
 
 tmp_file="/tmp/$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 10)"
 
 # edit the PKGBUILD
 # 1. Update pkgver
 # 2. Set pkgrel to 1 (new version)
-echo "Updating existing PKGBUILD.."
+printf "${GREEN_ARROW} Updating existing PKGBUILD..\n"
 gawk -v newver="${repo_version_string}" '
     {
         if($0 ~ /pkgver=/) {
@@ -123,14 +130,26 @@ gawk -v newver="${repo_version_string}" '
 mv "${tmp_file}" "${pkgbuild_path}"
 
 (
+    if [[ "${skip_build}" -eq 0 ]]; then
+        cd "${repo_path}"
+        rm -r src pkg 2> /dev/null || true
+        if ! makepkg -fs --clean; then
+            echo "!!!!!!!!!!!!!! FAILED TO BUILD UPDATED PACKAGE LOCALLY!!!!!!!!!!!!!!" 2>&1
+            echo "Manual intervention needed" 2>&1
+            exit 1
+        fi
+        printf "$GREEN_ARROW Packaging locally successfull!\n"
+    fi
+)
+(
     cd "${repo_path}"
-    echo "Generating .SRCINFO"
+    printf "$GREEN_ARROW Generating .SRCINFO\n"
     makepkg --printsrcinfo > .SRCINFO
-    git add -A
-    echo "Committing changes"
+    git add PKGBUILD .SRCINFO
+    printf "$GREEN_ARROW Committing changes\n"
     git commit -m "Update PKGBUILD to version ${repo_version_string}"
     if [[ "${push_to_remote}" -ne 0 ]]; then
-        echo "Pushing changes"
-        # git push origin master
+        printf "$GREEN_ARROW Pushing changes\n"
+        git push origin master
     fi
 )
