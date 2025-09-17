@@ -19,7 +19,7 @@ LONGOPTIONS="help:,push:,skip"
 
 PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@")
 if [ $? -ne 0 ]; then
-    help
+    help "${0}"
     exit 1
 fi
 eval set -- "$PARSED"
