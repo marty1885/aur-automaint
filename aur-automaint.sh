@@ -7,28 +7,31 @@ GREEN_ARROW="\033[0;92m=>\033[0m"
 
 help() {
     echo "${1} - automatically maintain a versioned AUR package repository"
-    echo "Usage ${1} /path/to/local/repo"
-    echo "Arguments:"
+    echo "Usage ${1} [options] [--] /path/to/local/repo"
+    echo "Options:"
     echo "  -h, --help         Display this help message"
     echo "  -p, --push         Push changes to remote repository"
     echo "  -s, --skip         Skip test building locally"
     echo "  -u, --update-only  Update PKGBUILD only. Do not commit"
+    echo "  -f, --force        Skip version check"
 }
 
-OPTIONS="h:p:s:u"
-LONGOPTIONS="help:,push:,skip,update-only"
+OPTIONS="h:p:s:u:f"
+LONGOPTIONS="help:,push:,skip,update-only:,force"
 
-PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@")
-if [ $? -ne 0 ]; then
+if PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@") ; then
+    eval set -- "$PARSED"
+else
+    echo
     help "${0}"
     exit 1
 fi
-eval set -- "$PARSED"
 
 repo_path=""
 push_to_remote=0
 skip_build=0
 update_only=0
+force=0
 while true; do
     case "${1}" in
     -h|--help)
@@ -45,6 +48,10 @@ while true; do
         ;;
     -u|--update-only)
         update_only=1
+        shift
+        ;;
+    -f|--force)
+        force=1
         shift
         ;;
     --)
@@ -92,10 +99,31 @@ if [[ ! -v pkgver ]]; then
     exit 1
 fi
 
-gh_api_url="${url/github.com/api.github.com\/repos}/releases/latest"
-repo_version_string="$(curl -s "$gh_api_url" | jq -r '.name' | sed 's/^v//' | sed 's/^r//')"
+# pkgname check (I often mess this up)
+printf "$GREEN_ARROW Checking PKGBUILD name correctness\n"
 
-if [[ "${repo_version_string}" == "${pkgver}" ]]; then
+dirname="$(basename ${repo_path})"
+if [[ "${dirname}" != "${pkgname}" ]]; then
+    echo "ERROR! PKGBUILD indicated package name is ${pkgname} but lives in directory ${dirname}"
+    exit 1
+fi
+# Check if pkgver is a function on non -git packages (should be string)
+declare -f pkgver > /dev/null && pkgvar_is_func=1 || pkgvar_is_func=0
+if [[ "${dirname}" =~ .*-git.* ]] && [[ "${pkgvar_is_func}" == 0 ]]; then
+    echo "ERROR! pkgver should be a function in a git package"
+    exit 1
+fi
+echo "DIRNAME $dirname"
+if [[ ! "${dirname}" =~ .*-git.* ]] && [[ "${pkgvar_is_func}" == 1 ]]; then
+    echo "ERROR! pkgver should NOT be a function in a non git package"
+    exit 1
+fi
+
+# Check version
+gh_api_url="${url/github.com/api.github.com\/repos}/releases/latest"
+repo_version_string="$(curl -s "$gh_api_url" | jq -r '.name' | sed 's/^v//;s/^r//')"
+
+if [[ "${repo_version_string}" == "${pkgver}" ]] && [[ "${force}" == 0 ]]; then
     echo "AUR package version is in sync with repo release. Nothing to do"
     exit 0
 fi
@@ -103,7 +131,6 @@ fi
 printf "$GREEN_ARROW Current package version is ${pkgver}. Repo has version ${repo_version_string}. Updating\n"
 
 tmp_file="$(mktemp)"
-
 # edit the PKGBUILD
 # 1. Update pkgver
 # 2. Set pkgrel to 1 (new version)
@@ -138,7 +165,7 @@ mv "${tmp_file}" "${pkgbuild_path}"
     if [[ "${skip_build}" -eq 0 ]]; then
         cd "${repo_path}"
         rm -r src pkg 2> /dev/null || true
-        if ! makepkg -fs --clean; then
+        if ! makepkg -fs; then
             echo "!!!!!!!!!!!!!! FAILED TO BUILD UPDATED PACKAGE LOCALLY !!!!!!!!!!!!!!" 2>&1
             echo "Manual intervention needed" 2>&1
             exit 1
