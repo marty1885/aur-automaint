@@ -60,6 +60,7 @@ while true; do
     *)
         if [[ "$repo_path" != "" ]]; then
             echo "Repository path already specified"
+            help "${0}"
             exit 1
         fi
         repo_path="${1}"
@@ -172,12 +173,6 @@ mv "${tmp_file}" "${pkgbuild_path}"
         cd "${repo_path}"
         # Clean up previous builds
         rm -r src pkg 2> /dev/null || true
-        pkg_exts=(tar.zst tar.xz tar.gz tar.bz2)
-        for ext in "${pkg_exts[@]}"; do
-            rm *."${ext}" 2> /dev/null || true
-            rm *."${ext}".* 2> /dev/null || true
-        done
-
         if ! makepkg -fs; then
             echo "!!!!!!!!!!!!!! FAILED TO BUILD UPDATED PACKAGE LOCALLY !!!!!!!!!!!!!!" 2>&1
             echo "Manual intervention needed" 2>&1
