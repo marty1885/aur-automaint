@@ -121,6 +121,10 @@ if [[ "${is_git_package}" == 0 ]] && [[ "${pkgvar_is_func}" == 1 ]]; then
 fi
 
 # Check version
+if [[ ! "${url}" =~ https://github.com/.* ]]; then
+    echo "ERROR! Invalid repository URL format or not a GitHub URL. Got ${url}"
+    exit 1
+fi
 gh_api_url="${url/github.com/api.github.com\/repos}/releases"
 repo_version_string="$(curl -s "$gh_api_url" | jq -r '[.[] | select(.draft == false and .prerelease == false)][0].tag_name' | sed 's/^v//;s/^r//')"
 
