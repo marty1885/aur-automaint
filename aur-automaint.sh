@@ -16,6 +16,11 @@ help() {
     echo "  -f, --force        Skip version check"
 }
 
+if [[ $# == 0 ]]; then
+    help "${0}"
+    exit 1
+fi
+
 OPTIONS="h:p:s:u:f"
 LONGOPTIONS="help:,push:,skip,update-only:,force"
 
