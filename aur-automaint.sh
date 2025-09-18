@@ -147,14 +147,15 @@ mv "${tmp_file}" "${pkgbuild_path}"
     fi
 )
 
-if [[ "${update_only}" -ne 0 ]]; then
-    exit 0
-fi
-
 (
     cd "${repo_path}"
     printf "$GREEN_ARROW Generating .SRCINFO\n"
     makepkg --printsrcinfo > .SRCINFO
+
+    if [[ "${update_only}" -ne 0 ]]; then
+        exit 0
+    fi
+
     git add PKGBUILD .SRCINFO
     printf "$GREEN_ARROW Committing changes\n"
     git commit -m "Update PKGBUILD to version ${repo_version_string}"
