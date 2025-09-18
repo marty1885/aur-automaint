@@ -102,7 +102,7 @@ fi
 
 printf "$GREEN_ARROW Current package version is ${pkgver}. Repo has version ${repo_version_string}. Updating\n"
 
-tmp_file="/tmp/$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | head -c 10)"
+tmp_file="$(mktemp)"
 
 # edit the PKGBUILD
 # 1. Update pkgver
@@ -117,7 +117,6 @@ gawk -v newver="${repo_version_string}" '
             }
             edited=1
             print "pkgver=" newver
-            next
         }
         else if($0 ~ /^pkgrel=/) {
             print "pkgrel=1"
