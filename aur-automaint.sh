@@ -109,19 +109,25 @@ if [[ "${dirname}" != "${pkgname}" ]]; then
 fi
 # Check if pkgver is a function on non -git packages (should be string)
 declare -f pkgver > /dev/null && pkgvar_is_func=1 || pkgvar_is_func=0
-if [[ "${dirname}" =~ .*-git.* ]] && [[ "${pkgvar_is_func}" == 0 ]]; then
+[[ "${dirname}" =~ .*-git.* ]] && is_git_package=1 || is_git_package=0
+if [[ "${is_git_package}" == 1 ]] && [[ "${pkgvar_is_func}" == 0 ]]; then
     echo "ERROR! pkgver should be a function in a git package"
     exit 1
 fi
-echo "DIRNAME $dirname"
-if [[ ! "${dirname}" =~ .*-git.* ]] && [[ "${pkgvar_is_func}" == 1 ]]; then
+if [[ "${is_git_package}" == 0 ]] && [[ "${pkgvar_is_func}" == 1 ]]; then
     echo "ERROR! pkgver should NOT be a function in a non git package"
     exit 1
 fi
 
 # Check version
-gh_api_url="${url/github.com/api.github.com\/repos}/releases/latest"
-repo_version_string="$(curl -s "$gh_api_url" | jq -r '.name' | sed 's/^v//;s/^r//')"
+gh_api_url="${url/github.com/api.github.com\/repos}/releases"
+repo_version_string="$(curl -s "$gh_api_url" | jq -r '[.[] | select(.draft == false and .prerelease == false)][0].tag_name' | sed 's/^v//;s/^r//')"
+
+# Version sanity check
+if [[ ! "${repo_version_string}" =~ [0-9\\-\\.]+ ]]; then
+    echo "ERROR! Weird version string: '${repo_version_string}'. Manual handle needed"
+    exit 1
+fi
 
 if [[ "${repo_version_string}" == "${pkgver}" ]] && [[ "${force}" == 0 ]]; then
     echo "AUR package version is in sync with repo release. Nothing to do"
@@ -164,13 +170,43 @@ mv "${tmp_file}" "${pkgbuild_path}"
 (
     if [[ "${skip_build}" -eq 0 ]]; then
         cd "${repo_path}"
+        # Clean up previous builds
         rm -r src pkg 2> /dev/null || true
+        pkg_exts=(tar.zst tar.xz tar.gz tar.bz2)
+        for ext in "${pkg_exts[@]}"; do
+            rm *."${ext}" 2> /dev/null || true
+            rm *."${ext}".* 2> /dev/null || true
+        done
+
         if ! makepkg -fs; then
             echo "!!!!!!!!!!!!!! FAILED TO BUILD UPDATED PACKAGE LOCALLY !!!!!!!!!!!!!!" 2>&1
             echo "Manual intervention needed" 2>&1
             exit 1
         fi
-        printf "$GREEN_ARROW Packaging locally successfull!\n"
+
+        # Check if we should update hash
+        update_hash=0
+        hashtypes=("b2" "sha512" "sha384" "sha256" "sha224" "sha1" "md5" "cksums")
+        for type in "${hashtypes[@]}"; do
+            varname="${type}sums"
+            if [[ ! -v varname ]]; then
+                continue
+            fi
+
+            for item in "${!varname[@]}"; do
+                if [[ "${item}" != "SKIP" ]] && [[ "${item}" != "" ]]; then
+                    update_hash=1
+                fi
+            done
+        done
+        if [[ "${is_git_package}" == 1 ]]; then
+            echo "ERROR: Should NOT update hash for git packages. But values set."
+            exit 1
+        fi
+        if [[ "${update_hash}" -eq 1 ]]; then
+            printf "$GREEN_ARROW Updating hash\n"
+            updpkgsums
+        fi
     fi
 )
 

@@ -16,3 +16,4 @@ Dependnencies
 * GNU awk
 * getopt
 * git
+* pacman-contrib
