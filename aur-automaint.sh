@@ -131,7 +131,7 @@ if [[ ! "${url}" =~ https://github.com/.* ]]; then
     exit 1
 fi
 gh_api_url="${url/github.com/api.github.com\/repos}/releases"
-repo_version_string="$(curl -s "$gh_api_url" | jq -r '[.[] | select(.draft == false and .prerelease == false)][0].tag_name' | sed 's/^v//;s/^r//')"
+repo_version_string="$(curl --retry 5 --retry-delay 7 -s "$gh_api_url" | jq -r '[.[] | select(.draft == false and .prerelease == false)][0].tag_name' | sed 's/^v//;s/^r//')"
 
 # Version sanity check
 if [[ ! "${repo_version_string}" =~ [0-9\\-\\.]+ ]]; then
