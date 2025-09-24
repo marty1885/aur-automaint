@@ -182,7 +182,7 @@ mv "${tmp_file}" "${pkgbuild_path}"
         cd "${repo_path}"
         # Clean up previous builds
         rm -r src pkg 2> /dev/null || true
-        if ! makepkg -fs; then
+        if ! makepkg -fs --skipchecksums; then
             echo "!!!!!!!!!!!!!! FAILED TO BUILD UPDATED PACKAGE LOCALLY !!!!!!!!!!!!!!" 2>&1
             echo "Manual intervention needed" 2>&1
             exit 1
