@@ -108,7 +108,8 @@ fi
 # pkgname check (I often mess this up)
 printf "$GREEN_ARROW Checking PKGBUILD name correctness\n"
 
-dirname="$(basename ${repo_path})"
+repo_real_path="$(realpath ${repo_path})"
+dirname="$(basename ${repo_real_path})"
 if [[ "${dirname}" != "${pkgname}" ]]; then
     echo "ERROR! PKGBUILD indicated package name is ${pkgname} but lives in directory ${dirname}" >&2
     exit 1
