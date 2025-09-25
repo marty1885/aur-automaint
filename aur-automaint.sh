@@ -27,8 +27,8 @@ LONGOPTIONS="help:,push:,skip,update-only:,force"
 if PARSED=$(getopt --options=$OPTIONS --longoptions=$LONGOPTIONS --name "$0" -- "$@") ; then
     eval set -- "$PARSED"
 else
-    echo
-    help "${0}"
+    echo >&2
+    help "${0}" >&2
     exit 1
 fi
 
@@ -64,8 +64,8 @@ while true; do
     ;;
     *)
         if [[ "$repo_path" != "" ]]; then
-            echo "Repository path already specified"
-            help "${0}"
+            echo "Repository path already specified" >&2
+            help "${0}" >&2
             exit 1
         fi
         repo_path="${1}"
@@ -78,30 +78,30 @@ done
 if [[ "${repo_path}" == "" ]]; then
     echo "Missing repository path" >&2
     echo >&2
-    help "${0}"
+    help "${0}" >&2
     exit 1
 fi
 
 if [ ! -d "${repo_path}" ]; then
-    echo "cannot access path '${repo_path}' as a directory"
+    echo "cannot access path '${repo_path}' as a directory" >&2
     exit 1
 fi
 
 pkgbuild_path="${repo_path}/PKGBUILD"
 if [ ! -f "${pkgbuild_path}" ]; then
-    echo "cannot access '${pkgbuild_path}' as a file"
+    echo "cannot access '${pkgbuild_path}' as a file" >&2
     exit 1
 fi
 
 source "${pkgbuild_path}"
 
 if [[ ! -v url ]]; then
-    echo "PKGBUILD does not contain repository URL"
+    echo "PKGBUILD does not contain repository URL" >&2
     exit 1
 fi
 
 if [[ ! -v pkgver ]]; then
-    echo "PKGBUILD does not contain pkgver"
+    echo "PKGBUILD does not contain pkgver" >&2
     exit 1
 fi
 
@@ -110,24 +110,24 @@ printf "$GREEN_ARROW Checking PKGBUILD name correctness\n"
 
 dirname="$(basename ${repo_path})"
 if [[ "${dirname}" != "${pkgname}" ]]; then
-    echo "ERROR! PKGBUILD indicated package name is ${pkgname} but lives in directory ${dirname}"
+    echo "ERROR! PKGBUILD indicated package name is ${pkgname} but lives in directory ${dirname}" >&2
     exit 1
 fi
 # Check if pkgver is a function on non -git packages (should be string)
 declare -f pkgver > /dev/null && pkgvar_is_func=1 || pkgvar_is_func=0
 [[ "${dirname}" =~ .*-git.* ]] && is_git_package=1 || is_git_package=0
 if [[ "${is_git_package}" == 1 ]] && [[ "${pkgvar_is_func}" == 0 ]]; then
-    echo "ERROR! pkgver should be a function in a git package"
+    echo "ERROR! pkgver should be a function in a git package" >&2
     exit 1
 fi
 if [[ "${is_git_package}" == 0 ]] && [[ "${pkgvar_is_func}" == 1 ]]; then
-    echo "ERROR! pkgver should NOT be a function in a non git package"
+    echo "ERROR! pkgver should NOT be a function in a non git package" >&2
     exit 1
 fi
 
 # Check version
 if [[ ! "${url}" =~ https://github.com/.* ]]; then
-    echo "ERROR! Invalid repository URL format or not a GitHub URL. Got ${url}"
+    echo "ERROR! Invalid repository URL format or not a GitHub URL. Got ${url}" >&2
     exit 1
 fi
 gh_api_url="${url/github.com/api.github.com\/repos}/releases"
@@ -135,7 +135,7 @@ repo_version_string="$(curl --retry 5 --retry-delay 7 -s "$gh_api_url" | jq -r '
 
 # Version sanity check
 if [[ ! "${repo_version_string}" =~ [0-9\\-\\.]+ ]]; then
-    echo "ERROR! Weird version string: '${repo_version_string}'. Manual handle needed"
+    echo "ERROR! Weird version string: '${repo_version_string}'. Manual handle needed" >&2
     exit 1
 fi
 
@@ -183,8 +183,8 @@ mv "${tmp_file}" "${pkgbuild_path}"
         # Clean up previous builds
         rm -r src pkg 2> /dev/null || true
         if ! makepkg -fs --skipchecksums; then
-            echo "!!!!!!!!!!!!!! FAILED TO BUILD UPDATED PACKAGE LOCALLY !!!!!!!!!!!!!!" 2>&1
-            echo "Manual intervention needed" 2>&1
+            echo "!!!!!!!!!!!!!! FAILED TO BUILD UPDATED PACKAGE LOCALLY !!!!!!!!!!!!!!" >&2
+            echo "Manual intervention needed" >&2
             exit 1
         fi
 
@@ -204,7 +204,7 @@ mv "${tmp_file}" "${pkgbuild_path}"
             done
         done
         if [[ "${is_git_package}" == 1 ]]; then
-            echo "ERROR: Should NOT update hash for git packages. But values set."
+            echo "ERROR: Should NOT update hash for git packages. But values set." >&2
             exit 1
         fi
         if [[ "${update_hash}" -eq 1 ]]; then
