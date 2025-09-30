@@ -105,13 +105,21 @@ if [[ ! -v pkgver ]]; then
     exit 1
 fi
 
-# pkgname check (I often mess this up)
+# pkgname/pkgbase check (I often mess this up)
 printf "$GREEN_ARROW Checking PKGBUILD name correctness\n"
 
 repo_real_path="$(realpath ${repo_path})"
 dirname="$(basename ${repo_real_path})"
-if [[ "${dirname}" != "${pkgname}" ]]; then
-    echo "ERROR! PKGBUILD indicated package name is ${pkgname} but lives in directory ${dirname}" >&2
+
+package_name="$pkgbase"
+if [[ ! -v pkgbase ]]; then
+    package_name="${pkgname}"
+fi
+
+
+
+if [[ "${dirname}" != "${package_name}" ]]; then
+    echo "ERROR! PKGBUILD indicated package name is ${package_name} but lives in directory ${dirname}" >&2
     exit 1
 fi
 # Check if pkgver is a function on non -git packages (should be string)
