@@ -155,12 +155,18 @@ fi
 
 printf "$GREEN_ARROW Current package version is ${pkgver}. Repo has version ${repo_version_string}. Updating\n"
 
+provide=""
+if [[ -v provides ]]; then
+    provide="${provides[0]}"
+fi
+
 tmp_file="$(mktemp)"
 # edit the PKGBUILD
 # 1. Update pkgver
 # 2. Set pkgrel to 1 (new version)
+# 3. If not -git package, set version for `provides`
 printf "${GREEN_ARROW} Updating existing PKGBUILD..\n"
-gawk -v newver="${repo_version_string}" '
+gawk -v newver="${repo_version_string}" -v is_git_package="${is_git_package}" -v pkgver="${pkgver}" -v provide="${provide}" '
     {
         if($0 ~ /^pkgver=/) {
             if(edited) {
@@ -173,6 +179,9 @@ gawk -v newver="${repo_version_string}" '
         else if($0 ~ /^pkgrel=/) {
             print "pkgrel=1"
         }
+        else if($0 ~ /^provides=/ && !is_git_package) {
+            print "provides=('\''" provide "=" pkgver "'\'')"
+        }
         else {
             print $0
         }
@@ -184,6 +193,9 @@ gawk -v newver="${repo_version_string}" '
         }
     }
 ' "${pkgbuild_path}" > "${tmp_file}"
+
+
+
 mv "${tmp_file}" "${pkgbuild_path}"
 
 (
