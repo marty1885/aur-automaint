@@ -180,6 +180,7 @@ gawk -v newver="${repo_version_string}" -v is_git_package="${is_git_package}" -v
             print "pkgrel=1"
         }
         else if($0 ~ /^provides=/ && !is_git_package) {
+            gsub(/=.*/, "", provide)
             print "provides=('\''" provide "=" pkgver "'\'')"
         }
         else {
